@@ -86,7 +86,7 @@ def get_unencrypted_ebs_volumes(
                     (volume["VolumeId"], instance_id, instance_name, volume_name)
                 )
 
-    return unencrypted_volumes[2:]
+    return unencrypted_volumes[:2]
 
 
 def create_snapshot(volume_id: str, volume_name: str, ec2: boto3.client) -> str:
