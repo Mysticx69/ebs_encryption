@@ -7,11 +7,31 @@ snapshots using the specified KMS key ID.
 The original unencrypted snapshots are
 then deleted. The script requires the Boto3 library and valid AWS credentials.
 """
+import logging
 from typing import List
 from typing import Optional
 from typing import Tuple
 
 import boto3
+import botocore.exceptions
+
+LOG_FILE = "script_encrypt_ebs.log"
+
+logging.basicConfig(
+    filename=LOG_FILE,
+    filemode="a",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+)
+
+logging.getLogger("boto3").setLevel(logging.WARNING)
+logging.getLogger("botocore").setLevel(logging.WARNING)
+logging.getLogger().addHandler(console_handler)
 
 
 def get_instance_name(instance_id: str, ec2: boto3.client) -> Optional[str]:
@@ -26,10 +46,22 @@ def get_instance_name(instance_id: str, ec2: boto3.client) -> Optional[str]:
     return name_tag["Value"] if name_tag else None
 
 
+def get_volume_name(volume_id: str, ec2: boto3.client) -> Optional[str]:
+    """Get the name of an EBS volume using its volume ID."""
+    response = ec2.describe_volumes(VolumeIds=[volume_id])
+    volume = response["Volumes"][0]
+
+    if "Tags" not in volume:
+        return "None"
+
+    name_tag = next((tag for tag in volume["Tags"] if tag["Key"] == "Name"), None)
+    return name_tag["Value"] if name_tag else None
+
+
 def get_unencrypted_ebs_volumes(
     ec2: boto3.client,
-) -> List[Tuple[str, str, Optional[str]]]:
-    """Get a list of unencrypted EBS volumes and their associated instance IDs and names."""
+) -> List[Tuple[str, str, Optional[str], Optional[str]]]:
+    """Get a list of unencrypted EBS volumes and their associated instance IDs, names and volume names."""
     paginator = ec2.get_paginator("describe_volumes")
     unencrypted_volumes = []
 
@@ -46,18 +78,20 @@ def get_unencrypted_ebs_volumes(
                 instance_name = (
                     get_instance_name(instance_id, ec2) if instance_id else None
                 )
+                volume_name = get_volume_name(volume["VolumeId"], ec2)
                 unencrypted_volumes.append(
-                    (volume["VolumeId"], instance_id, instance_name)
+                    (volume["VolumeId"], instance_id, instance_name, volume_name)
                 )
 
     return unencrypted_volumes[:1]
 
 
-def create_snapshot(volume_id: str, ec2: boto3.client) -> str:
+def create_snapshot(volume_id: str, volume_name: str, ec2: boto3.client) -> str:
     """Create a snapshot of the specified EBS volume."""
+    logging.info("2. Creating snapshot of %s...", volume_id)
     snapshot = ec2.create_snapshot(
         VolumeId=volume_id,
-        Description=f"Snapshot for {volume_id} - Created by script (SecureTheCloud)",
+        Description=f"Snapshot for {volume_id} ({volume_name}) - Created by script (SecureTheCloud)",
     )
     return snapshot["SnapshotId"]
 
@@ -78,12 +112,13 @@ def copy_snapshot_with_encryption(
 ) -> str:
     """Copy an existing snapshot with server-side encryption using the specified KMS key and optionally enable Fast Snapshot Restore."""
     current_region = ec2.meta.region_name
+    logging.info("3. Copying snapshot %s and encrypting it...", snapshot_id)
     encrypted_snapshot = ec2.copy_snapshot(
         SourceRegion=current_region,
         SourceSnapshotId=snapshot_id,
         KmsKeyId=kms_key_id,
         Encrypted=True,
-        Description=f"Encrypted snapshot copy for {volume_id} from {snapshot_id}",
+        Description=f"Encrypted snapshot copy for {volume_id}",
     )
     encrypted_snapshot_id = encrypted_snapshot["SnapshotId"]
 
@@ -92,40 +127,55 @@ def copy_snapshot_with_encryption(
             AvailabilityZones=fsr_availability_zones,
             SourceSnapshotIds=[encrypted_snapshot_id],
         )
-        print(
-            f"Fast Snapshot Restore enabled for snapshot {encrypted_snapshot_id} in Availability Zones {', '.join(fsr_availability_zones)}"
+        logging.info(
+            f"Fast Snapshot Restore (FSR) enabled for new snapshot %s in Availability Zone(s) {', '.join(fsr_availability_zones)}",
+            encrypted_snapshot_id,
         )
 
     return encrypted_snapshot_id
 
 
-def stop_instance(instance_id: str, instance_name: str, ec2: boto3.client) -> None:
+def stop_instance(instance_id: str, instance_name: str, ec2: boto3.client) -> bool:
     """Stop the specified EC2 instance."""
-    if instance_id:
-        ec2.stop_instances(InstanceIds=[instance_id])
-        print(f"Stopping instance {instance_id} ({instance_name})")
-        waiter = ec2.get_waiter("instance_stopped")
-        waiter.wait(InstanceIds=[instance_id])
-        print(f"Instance {instance_id} ({instance_name}) stopped")
+    try:
+        if instance_id:
+            ec2.stop_instances(InstanceIds=[instance_id])
+            logging.info("1. Stopping instance %s (%s)...", instance_id, instance_name)
+            waiter = ec2.get_waiter("instance_stopped")
+            waiter.wait(InstanceIds=[instance_id])
+            logging.info("Instance %s (%s) stopped.", instance_id, instance_name)
+        return True
+    except botocore.exceptions.ClientError as exceptclienterror:
+        if exceptclienterror.response["Error"]["Code"] == "UnsupportedOperation":
+            logging.warning(
+                "Cannot stop instance %s (%s) due to UnsupportedOperation. Skipping...",
+                instance_id,
+                instance_name,
+            )
+            return False
+        else:
+            raise
 
 
 def start_instance(instance_id: str, ec2: boto3.client) -> None:
     """Start the specified EC2 instance."""
     if instance_id:
         ec2.start_instances(InstanceIds=[instance_id])
-        print(f"Starting instance {instance_id}")
+        logging.info("8. Starting instance %s...", instance_id)
         waiter = ec2.get_waiter("instance_running")
         waiter.wait(InstanceIds=[instance_id])
-        print(f"Instance {instance_id} started")
+        logging.info("Instance %s started.", instance_id)
 
 
 def detach_volume(volume_id: str, ec2: boto3.client) -> None:
     """Detach the specified EBS volume."""
     response = ec2.detach_volume(VolumeId=volume_id)
-    print(f'Detaching volume {volume_id} from instance {response["InstanceId"]}')
+    logging.info(
+        f'4. Detaching volume %s from instance {response["InstanceId"]}...', volume_id
+    )
     waiter = ec2.get_waiter("volume_available")
     waiter.wait(VolumeIds=[volume_id])
-    print(f"Volume {volume_id} detached")
+    logging.info("Volume %s detached", volume_id)
 
 
 def create_encrypted_volume(
@@ -139,10 +189,12 @@ def create_encrypted_volume(
         Encrypted=True,
     )
     volume_id = response["VolumeId"]
-    print(f"Creating encrypted volume {volume_id} from snapshot {snapshot_id}")
+    logging.info(
+        "5. Creating encrypted volume %s from snapshot %s...", volume_id, snapshot_id
+    )
     waiter = ec2.get_waiter("volume_available")
     waiter.wait(VolumeIds=[volume_id])
-    print(f"Encrypted volume {volume_id} created")
+    logging.info("Encrypted volume %s created", volume_id)
     return volume_id
 
 
@@ -151,10 +203,12 @@ def attach_volume(
 ) -> None:
     """Attach the specified EBS volume to the specified instance."""
     ec2.attach_volume(VolumeId=volume_id, InstanceId=instance_id, Device=device)
-    print(f"Attaching volume {volume_id} to instance {instance_id}")
+    logging.info(
+        "7. Attaching new encrypted volume %s to instance %s...", volume_id, instance_id
+    )
     waiter = ec2.get_waiter("volume_in_use")
     waiter.wait(VolumeIds=[volume_id])
-    print(f"Volume {volume_id} attached to instance {instance_id}")
+    logging.info("Volume %s attached to instance %s", volume_id, instance_id)
 
 
 def delete_snapshot(snapshot_id: str, ec2: boto3.client) -> None:
@@ -165,12 +219,14 @@ def delete_snapshot(snapshot_id: str, ec2: boto3.client) -> None:
 def copy_tags(source_volume_id: str, target_volume_id: str, ec2: boto3.client) -> None:
     """Copy tags from the source EBS volume to the target EBS volume."""
     source_volume = ec2.describe_volumes(VolumeIds=[source_volume_id])["Volumes"][0]
+    logging.info(
+        "6. Copied tags from unencrypted volume %s to new encrypted volume %s",
+        source_volume_id,
+        target_volume_id,
+    )
 
     if "Tags" in source_volume:
         ec2.create_tags(Resources=[target_volume_id], Tags=source_volume["Tags"])
-        print(
-            f"Copied tags from volume {source_volume_id} to volume {target_volume_id}"
-        )
 
 
 def disable_fsr(
@@ -181,8 +237,9 @@ def disable_fsr(
         AvailabilityZones=fsr_availability_zones,
         SourceSnapshotIds=[snapshot_id],
     )
-    print(
-        f"Fast Snapshot Restore disabled for snapshot {snapshot_id} in Availability Zones {', '.join(fsr_availability_zones)}"
+    logging.info(
+        f"Fast Snapshot Restore (FSR) disabled for snapshot %s in Availability Zones {', '.join(fsr_availability_zones)}",
+        snapshot_id,
     )
 
 
@@ -191,17 +248,28 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
     session = boto3.Session(profile_name="lzv1-ebs", region_name="eu-west-1")
     ec2 = session.client("ec2")
     unencrypted_volumes = get_unencrypted_ebs_volumes(ec2)
-    print(unencrypted_volumes)
 
-    for volume_id, instance_id, instance_name in unencrypted_volumes:
-        print(
-            f"Encrypting volume {volume_id} attached to instance {instance_id} ({instance_name})..."
+    for volume_id, instance_id, instance_name, volume_name in unencrypted_volumes:
+        logging.info("#" * 45)
+        logging.info("#         Processing the request...")
+        logging.info("#" * 45)
+        logging.info(
+            "Encrypting volume %s (%s) attached to instance %s (%s)...",
+            volume_id,
+            volume_name,
+            instance_id,
+            instance_name,
         )
+
+        stopped = stop_instance(instance_id, instance_name, ec2)
+        if not stopped:
+            continue
 
         stop_instance(instance_id, instance_name, ec2)
 
-        snapshot_id = create_snapshot(volume_id, ec2)
+        snapshot_id = create_snapshot(volume_id, volume_name, ec2)
         wait_for_snapshot(snapshot_id, ec2)
+        logging.info("Snapshot created : %s.", snapshot_id)
 
         volume_info = ec2.describe_volumes(VolumeIds=[volume_id])["Volumes"][0]
         availability_zone = volume_info["AvailabilityZone"]
@@ -216,13 +284,18 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
             fsr_availability_zones=fsr_availability_zones,
         )
         wait_for_snapshot(encrypted_snapshot_id, ec2)
+        logging.info(
+            "Encrypted snapshot created for volume %s: %s",
+            volume_id,
+            encrypted_snapshot_id,
+        )
 
         delete_snapshot(snapshot_id, ec2)
-        print(
-            f"Encrypted snapshot created for volume {volume_id}: {encrypted_snapshot_id}"
-        )
-        print(
-            f"Unencrypted snapshot previously created for {volume_id} : {snapshot_id} has been deleted.  "
+
+        logging.info(
+            "Unencrypted snapshot previously created for %s : %s has been deleted.",
+            volume_id,
+            snapshot_id,
         )
 
         device = (
@@ -245,13 +318,31 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
         disable_fsr(encrypted_snapshot_id, fsr_availability_zones, ec2)
         start_instance(instance_id, ec2)
 
-        print(f"Encryption process for volume {volume_id} completed")
+        logging.info("DONE. Encryption process for volume %s completed\n", volume_id)
+        logging.info("#" * 45)
+        logging.info("#         Summary information")
+        logging.info("#" * 45)
+        logging.info(
+            "Unencrypted volume %s attached to %s (%s) has been processed.",
+            volume_id,
+            instance_id,
+            instance_name,
+        )
+        logging.info(
+            "New volume encrypted : %s from snapshot %s.",
+            encrypted_volume_id,
+            encrypted_snapshot_id,
+        )
+        logging.info(
+            "Instance %s (%s) started successfully.", instance_id, instance_name
+        )
+        logging.info(
+            "Please make sure that all the services hosted on this machine are healthly!"
+        )
+        logging.info("-" * 45)
+        logging.info("\n" * 2)
 
 
 if __name__ == "__main__":
     KMS_KEY_ID = "alias/aws/ebs"
     encrypt_ebs_volumes(KMS_KEY_ID)
-    # session_test = boto3.Session(profile_name="lzv1-ebs", region_name="eu-west-1")
-    # ec2_session = session_test.client("ec2")
-    # test = get_unencrypted_ebs_volumes(ec2_session)
-    # print(test)
