@@ -13,7 +13,9 @@ from typing import Optional
 from typing import Tuple
 
 import boto3
-import botocore.exceptions
+from botocore.exceptions import ClientError
+from botocore.exceptions import WaiterError
+
 
 LOG_FILE = "script_encrypt_ebs.log"
 
@@ -28,10 +30,11 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(
     logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 )
+logging.getLogger().addHandler(console_handler)
+
 
 logging.getLogger("boto3").setLevel(logging.WARNING)
 logging.getLogger("botocore").setLevel(logging.WARNING)
-logging.getLogger().addHandler(console_handler)
 
 
 def get_instance_name(instance_id: str, ec2: boto3.client) -> Optional[str]:
@@ -40,7 +43,7 @@ def get_instance_name(instance_id: str, ec2: boto3.client) -> Optional[str]:
     instance = response["Reservations"][0]["Instances"][0]
 
     if "Tags" not in instance:
-        return None
+        return "Name Unknown"
 
     name_tag = next((tag for tag in instance["Tags"] if tag["Key"] == "Name"), None)
     return name_tag["Value"] if name_tag else None
@@ -52,7 +55,7 @@ def get_volume_name(volume_id: str, ec2: boto3.client) -> Optional[str]:
     volume = response["Volumes"][0]
 
     if "Tags" not in volume:
-        return "None"
+        return "Name Unknown"
 
     name_tag = next((tag for tag in volume["Tags"] if tag["Key"] == "Name"), None)
     return name_tag["Value"] if name_tag else None
@@ -83,7 +86,7 @@ def get_unencrypted_ebs_volumes(
                     (volume["VolumeId"], instance_id, instance_name, volume_name)
                 )
 
-    return unencrypted_volumes[:1]
+    return unencrypted_volumes[2:]
 
 
 def create_snapshot(volume_id: str, volume_name: str, ec2: boto3.client) -> str:
@@ -112,7 +115,9 @@ def copy_snapshot_with_encryption(
 ) -> str:
     """Copy an existing snapshot with server-side encryption using the specified KMS key and optionally enable Fast Snapshot Restore."""
     current_region = ec2.meta.region_name
-    logging.info("3. Copying snapshot %s and encrypting it...", snapshot_id)
+    logging.info(
+        "3. Copying snapshot %s and encrypting it with KMS key...", snapshot_id
+    )
     encrypted_snapshot = ec2.copy_snapshot(
         SourceRegion=current_region,
         SourceSnapshotId=snapshot_id,
@@ -145,9 +150,9 @@ def stop_instance(instance_id: str, instance_name: str, ec2: boto3.client) -> bo
             waiter.wait(InstanceIds=[instance_id])
             logging.info("Instance %s (%s) stopped.", instance_id, instance_name)
         return True
-    except botocore.exceptions.ClientError as exceptclienterror:
+    except ClientError as exceptclienterror:
         if exceptclienterror.response["Error"]["Code"] == "UnsupportedOperation":
-            logging.warning(
+            logging.error(
                 "Cannot stop instance %s (%s) due to UnsupportedOperation. Skipping...",
                 instance_id,
                 instance_name,
@@ -155,6 +160,13 @@ def stop_instance(instance_id: str, instance_name: str, ec2: boto3.client) -> bo
             return False
         else:
             raise
+    except WaiterError as exceptwaitererror:
+        logging.error(
+            f"Instance %s (%s) failed to stop: {exceptwaitererror}",
+            instance_id,
+            instance_name,
+        )
+        return False
 
 
 def start_instance(instance_id: str, ec2: boto3.client) -> None:
@@ -199,12 +211,15 @@ def create_encrypted_volume(
 
 
 def attach_volume(
-    volume_id: str, instance_id: str, device: str, ec2: boto3.client
+    volume_id: str, instance_id: str, instance_name: str, device: str, ec2: boto3.client
 ) -> None:
     """Attach the specified EBS volume to the specified instance."""
     ec2.attach_volume(VolumeId=volume_id, InstanceId=instance_id, Device=device)
     logging.info(
-        "7. Attaching new encrypted volume %s to instance %s...", volume_id, instance_id
+        "7. Attaching new encrypted volume %s to instance %s (%s)...",
+        volume_id,
+        instance_id,
+        instance_name,
     )
     waiter = ec2.get_waiter("volume_in_use")
     waiter.wait(VolumeIds=[volume_id])
@@ -238,7 +253,7 @@ def disable_fsr(
         SourceSnapshotIds=[snapshot_id],
     )
     logging.info(
-        f"Fast Snapshot Restore (FSR) disabled for snapshot %s in Availability Zones {', '.join(fsr_availability_zones)}",
+        f"Fast Snapshot Restore (FSR) disabled for snapshot %s in Availability Zone(s) {', '.join(fsr_availability_zones)}",
         snapshot_id,
     )
 
@@ -264,8 +279,6 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
         stopped = stop_instance(instance_id, instance_name, ec2)
         if not stopped:
             continue
-
-        stop_instance(instance_id, instance_name, ec2)
 
         snapshot_id = create_snapshot(volume_id, volume_name, ec2)
         wait_for_snapshot(snapshot_id, ec2)
@@ -313,7 +326,7 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
         copy_tags(volume_id, encrypted_volume_id, ec2)
 
         if instance_id and device:
-            attach_volume(encrypted_volume_id, instance_id, device, ec2)
+            attach_volume(encrypted_volume_id, instance_id, instance_name, device, ec2)
 
         disable_fsr(encrypted_snapshot_id, fsr_availability_zones, ec2)
         start_instance(instance_id, ec2)
@@ -343,6 +356,11 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
         logging.info("\n" * 2)
 
 
+def main() -> None:
+    """Start of the script."""
+    kms_key_id = "alias/aws/ebs"
+    encrypt_ebs_volumes(kms_key_id)
+
+
 if __name__ == "__main__":
-    KMS_KEY_ID = "alias/aws/ebs"
-    encrypt_ebs_volumes(KMS_KEY_ID)
+    main()
