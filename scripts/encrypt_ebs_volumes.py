@@ -38,7 +38,16 @@ logging.getLogger("botocore").setLevel(logging.WARNING)
 
 
 def get_instance_name(instance_id: str, ec2: boto3.client) -> Optional[str]:
-    """Get the name of an EC2 instance using its instance ID."""
+    """
+    Get the name of an EC2 instance using its instance ID.
+
+    Args:
+        instance_id (str): The instance ID of the EC2 instance.
+        ec2 (boto3.client): A boto3 EC2 client object.
+
+    Returns:
+        Optional[str]: The name of the EC2 instance or None if the name is not found.
+    """
     response = ec2.describe_instances(InstanceIds=[instance_id])
     instance = response["Reservations"][0]["Instances"][0]
 
@@ -50,7 +59,16 @@ def get_instance_name(instance_id: str, ec2: boto3.client) -> Optional[str]:
 
 
 def get_volume_name(volume_id: str, ec2: boto3.client) -> Optional[str]:
-    """Get the name of an EBS volume using its volume ID."""
+    """
+    Get the name of an EBS volume using its volume ID.
+
+    Args:
+        volume_id (str): The volume ID of the EBS volume.
+        ec2 (boto3.client): A boto3 EC2 client object.
+
+    Returns:
+        Optional[str]: The name of the EBS volume or None if the name is not found.
+    """
     response = ec2.describe_volumes(VolumeIds=[volume_id])
     volume = response["Volumes"][0]
 
@@ -86,7 +104,7 @@ def get_unencrypted_ebs_volumes(
                     (volume["VolumeId"], instance_id, instance_name, volume_name)
                 )
 
-    return unencrypted_volumes[:2]
+    return unencrypted_volumes[:4]
 
 
 def create_snapshot(volume_id: str, volume_name: str, ec2: boto3.client) -> str:
@@ -140,9 +158,33 @@ def copy_snapshot_with_encryption(
     return encrypted_snapshot_id
 
 
+def is_instance_managed_by_asg_or_spot(instance_id: str, ec2: boto3.client) -> bool:
+    """Check if the specified EC2 instance is part of an Auto Scaling group or a Spot Instance."""
+    response = ec2.describe_instances(InstanceIds=[instance_id])
+    instance = response["Reservations"][0]["Instances"][0]
+
+    if "InstanceLifecycle" in instance and instance["InstanceLifecycle"] == "spot":
+        return True
+
+    if "Tags" in instance:
+        for tag in instance["Tags"]:
+            if tag["Key"] == "aws:autoscaling:groupName":
+                return True
+
+    return False
+
+
 def stop_instance(instance_id: str, instance_name: str, ec2: boto3.client) -> bool:
     """Stop the specified EC2 instance."""
     try:
+        if is_instance_managed_by_asg_or_spot(instance_id, ec2):
+            logging.warning(
+                "Instance %s (%s) is part of an Auto Scaling group or a Spot Instance. Skipping...\n",
+                instance_id,
+                instance_name,
+            )
+            return False
+
         if instance_id:
             ec2.stop_instances(InstanceIds=[instance_id])
             logging.info("1. Stopping instance %s (%s)...", instance_id, instance_name)
@@ -152,7 +194,7 @@ def stop_instance(instance_id: str, instance_name: str, ec2: boto3.client) -> bo
         return True
     except ClientError as exceptclienterror:
         if exceptclienterror.response["Error"]["Code"] == "UnsupportedOperation":
-            logging.error(
+            logging.warning(
                 "Cannot stop instance %s (%s) due to UnsupportedOperation. Skipping...",
                 instance_id,
                 instance_name,
@@ -263,6 +305,10 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
     session = boto3.Session(profile_name="lzv1-ebs", region_name="eu-west-1")
     ec2 = session.client("ec2")
     unencrypted_volumes = get_unencrypted_ebs_volumes(ec2)
+
+    if not unencrypted_volumes:
+        logging.info("No unencrypted EBS volumes found in the current region.")
+        return
 
     for volume_id, instance_id, instance_name, volume_name in unencrypted_volumes:
         logging.info("#" * 45)

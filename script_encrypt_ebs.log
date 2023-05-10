@@ -1,0 +1,39 @@
+2023-05-10 08:18:25,048 - INFO - #############################################
+2023-05-10 08:18:25,048 - INFO - #         Processing the request...
+2023-05-10 08:18:25,048 - INFO - #############################################
+2023-05-10 08:18:25,049 - INFO - Encrypting volume vol-0673e82ddfa1487e1 (Name Unknown) attached to instance i-0a0f73b4d2462bea9 (Staging-Itop-ECS)...
+2023-05-10 08:18:25,093 - WARNING - Instance i-0a0f73b4d2462bea9 (Staging-Itop-ECS) is part of an Auto Scaling group or a Spot Instance. Skipping...
+
+2023-05-10 08:18:25,094 - INFO - #############################################
+2023-05-10 08:18:25,094 - INFO - #         Processing the request...
+2023-05-10 08:18:25,094 - INFO - #############################################
+2023-05-10 08:18:25,094 - INFO - Encrypting volume vol-04034656687f0ca94 (bastionES) attached to instance i-0cd9a9490797d6b8a (bastionES)...
+2023-05-10 08:18:25,504 - INFO - 1. Stopping instance i-0cd9a9490797d6b8a (bastionES)...
+2023-05-10 08:18:55,722 - INFO - Instance i-0cd9a9490797d6b8a (bastionES) stopped.
+2023-05-10 08:18:55,722 - INFO - 2. Creating snapshot of vol-04034656687f0ca94...
+2023-05-10 08:19:26,073 - INFO - Snapshot created : snap-0e3caf9de2570cf2d.
+2023-05-10 08:19:26,121 - INFO - 3. Copying snapshot snap-0e3caf9de2570cf2d and encrypting it with KMS key...
+2023-05-10 08:19:26,537 - INFO - Fast Snapshot Restore (FSR) enabled for new snapshot snap-0d56fd818c894c051 in Availability Zone(s) eu-west-1a
+2023-05-10 08:23:57,355 - INFO - Encrypted snapshot created for volume vol-04034656687f0ca94: snap-0d56fd818c894c051
+2023-05-10 08:23:57,524 - INFO - Unencrypted snapshot previously created for vol-04034656687f0ca94 : snap-0e3caf9de2570cf2d has been deleted.
+2023-05-10 08:23:57,780 - INFO - 4. Detaching volume vol-04034656687f0ca94 from instance i-0cd9a9490797d6b8a...
+2023-05-10 08:24:12,897 - INFO - Volume vol-04034656687f0ca94 detached
+2023-05-10 08:24:13,166 - INFO - 5. Creating encrypted volume vol-0a34efb9fc8d2c28e from snapshot snap-0d56fd818c894c051...
+2023-05-10 08:24:28,281 - INFO - Encrypted volume vol-0a34efb9fc8d2c28e created
+2023-05-10 08:24:28,339 - INFO - 6. Copied tags from unencrypted volume vol-04034656687f0ca94 to new encrypted volume vol-0a34efb9fc8d2c28e
+2023-05-10 08:24:28,674 - INFO - 7. Attaching new encrypted volume vol-0a34efb9fc8d2c28e to instance i-0cd9a9490797d6b8a (bastionES)...
+2023-05-10 08:27:14,448 - INFO - Volume vol-0a34efb9fc8d2c28e attached to instance i-0cd9a9490797d6b8a
+2023-05-10 08:27:14,717 - INFO - Fast Snapshot Restore (FSR) disabled for snapshot snap-0d56fd818c894c051 in Availability Zone(s) eu-west-1a
+2023-05-10 08:27:15,131 - INFO - 8. Starting instance i-0cd9a9490797d6b8a...
+2023-05-10 08:27:45,332 - INFO - Instance i-0cd9a9490797d6b8a started.
+2023-05-10 08:27:45,332 - INFO - DONE. Encryption process for volume vol-04034656687f0ca94 completed
+
+2023-05-10 08:27:45,332 - INFO - #############################################
+2023-05-10 08:27:45,332 - INFO - #         Summary information
+2023-05-10 08:27:45,332 - INFO - #############################################
+2023-05-10 08:27:45,332 - INFO - Unencrypted volume vol-04034656687f0ca94 attached to i-0cd9a9490797d6b8a (bastionES) has been processed.
+2023-05-10 08:27:45,332 - INFO - New volume encrypted : vol-0a34efb9fc8d2c28e from snapshot snap-0d56fd818c894c051.
+2023-05-10 08:27:45,332 - INFO - Instance i-0cd9a9490797d6b8a (bastionES) started successfully.
+2023-05-10 08:27:45,332 - INFO - Please make sure that all the services hosted on this machine are healthly!
+2023-05-10 08:27:45,332 - INFO - ---------------------------------------------
+2023-05-10 08:27:45,332 - INFO -
