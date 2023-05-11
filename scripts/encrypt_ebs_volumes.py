@@ -8,6 +8,7 @@ The original unencrypted snapshots are
 then deleted. The script requires the Boto3 library and valid AWS credentials.
 """
 import logging
+import time
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -322,6 +323,8 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
             instance_name,
         )
 
+        start = time.time()
+
         stopped = stop_instance(instance_id, instance_name, ec2)
         if not stopped:
             continue
@@ -331,6 +334,7 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
         logging.info("Snapshot created : %s.", snapshot_id)
 
         volume_info = ec2.describe_volumes(VolumeIds=[volume_id])["Volumes"][0]
+        volue_size = volume_info["Size"]
         availability_zone = volume_info["AvailabilityZone"]
         enable_fsr = True
         fsr_availability_zones = [availability_zone]
@@ -377,6 +381,11 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
         disable_fsr(encrypted_snapshot_id, fsr_availability_zones, ec2)
         start_instance(instance_id, ec2)
 
+        end = time.time()
+        time_sec = end - start
+
+        processing_time = time.strftime("%H:%M:%S", time.gmtime(time_sec))
+
         logging.info("DONE. Encryption process for volume %s completed\n", volume_id)
         logging.info("#" * 45)
         logging.info("#         Summary information")
@@ -387,6 +396,9 @@ def encrypt_ebs_volumes(kms_key_id: str) -> None:
             instance_id,
             instance_name,
         )
+        logging.info("Processing time: %s", processing_time)
+        logging.info("Volume Size : %s GB", volue_size)
+
         logging.info(
             "New volume encrypted : %s from snapshot %s.",
             encrypted_volume_id,
