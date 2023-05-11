@@ -43,7 +43,7 @@ def get_instance_name(instance: boto3.resource("ec2").Instance) -> Optional[str]
         instance: The EC2 instance.
 
     Returns:
-        The name of the instance, or None if no name is found.
+        The name of the instance, or Name Unknown if no name is found.
     """
     for tag in instance.tags or []:
         if tag["Key"] == "Name":
@@ -59,7 +59,7 @@ def get_volume_name(volume: 'boto3.resource("ec2").Volume') -> Optional[str]:
         volume: The boto3 Volume object.
 
     Returns:
-        The name of the volume if found in the tags, otherwise None.
+        The name of the volume if found in the tags, otherwise Name Unknown.
     """
     for tag in volume.tags or []:
         if tag["Key"] == "Name":
@@ -140,6 +140,13 @@ def encrypt_volumes(
         None
     """
     instance = ec2.Instance(instance_id)
+    total_unencrypted_volumes = 0
+    unencrypted_volumes_info = []
+    encrypted_volumes_info = []
+
+    logger.info("#" * 45)
+    logger.info("#         Processing the request...")
+    logger.info("#" * 45)
 
     if is_part_of_auto_scaling_group(instance_id, autoscaling):
         logger.warning(
@@ -152,9 +159,6 @@ def encrypt_volumes(
         return
 
     instance_name = get_instance_name(instance)
-    logger.info("#" * 45)
-    logger.info("#         Processing the request...")
-    logger.info("#" * 45)
     logger.info(
         f"Encrypting volume(s) attached to instance {instance.id} ({instance_name})..."
     )
@@ -174,6 +178,11 @@ def encrypt_volumes(
         volume_name = get_volume_name(volume)
 
         if not volume.encrypted:
+            total_unencrypted_volumes += 1
+            unencrypted_volumes_info.append(
+                f"{volume.id} ({volume_name}) - {volume.size}"
+            )
+
             logger.info(
                 f"2. Creating snapshot of volume {volume.id} ({volume_name})..."
             )
@@ -268,6 +277,9 @@ def encrypt_volumes(
             waiter = ec2_client.get_waiter("volume_available")
             waiter.wait(VolumeIds=[encrypted_volume.id])
 
+            encrypted_volumes_info.append(
+                f"{encrypted_volume.id} from snapshot {encrypted_snapshot.id}"
+            )
             logger.info(f"Encrypted volume {encrypted_volume.id} created.")
 
             logger.info(f"Disabling Fast Snapshot Restore on {snapshot.snapshot_id}...")
@@ -284,10 +296,10 @@ def encrypt_volumes(
             )
             if tags:
                 encrypted_volume.create_tags(Tags=tags)
-                logger.info(
-                    f"6. Copied tags from unencrypted volume {volume.id} ({volume_name}) to new encrypted volume {encrypted_volume.id}."
-                )
 
+            logger.info(
+                f"6. Copied existing tags from unencrypted volume {volume.id} ({volume_name}) to new encrypted volume {encrypted_volume.id}."
+            )
             logger.info(
                 f"7. Attaching new encrypted volume {encrypted_volume.id} to instance {instance.id} ({instance_name})..."
             )
@@ -310,6 +322,26 @@ def encrypt_volumes(
         f"Encryption process for instance {instance.id} ({instance_name}) completed."
     )
 
+    total_processing_time = time.time() - start_time
+    formatted_time = time.strftime("%H:%M:%S", time.gmtime(total_processing_time))
+    total_volumes_size = sum(volume.size for volume in instance.volumes.all())
+
+    logger.info("\n")
+    logger.info("########################################")
+    logger.info("#         Summary information")
+    logger.info("########################################")
+    logger.info(
+        f"EC2 Instance {instance_id} ({instance_name}) had {total_unencrypted_volumes} volume(s) unencrypted: {', '.join(unencrypted_volumes_info)}"
+    )
+    logger.info(f"Processing time: {formatted_time}")
+    logger.info(f"Total Volume Size processed: {total_volumes_size} GB")
+    logger.info(f"New volume(s) encrypted: {', '.join(encrypted_volumes_info)}")
+    logger.info(f"Instance {instance_id} ({instance_name}) started successfully.")
+    logger.info(
+        "Please make sure that all the services hosted on this machine are healthly!"
+    )
+    logger.info("---------------------------------------------")
+
 
 def main(profile_name: str, region_name: str, kms_key_id: str) -> None:
     """
@@ -331,9 +363,9 @@ def main(profile_name: str, region_name: str, kms_key_id: str) -> None:
     autoscaling = session.client("autoscaling")
 
     unencrypted_info = gather_unencrypted_info(ec2)
-    print(unencrypted_info[:1])
+    print(unencrypted_info)
 
-    for instance_id, instance_name, _ in unencrypted_info[:1]:
+    for instance_id, instance_name, _ in unencrypted_info:
         try:
             encrypt_volumes(
                 instance_id, ec2, ec2_client, autoscaling, kms_key_id, logger
