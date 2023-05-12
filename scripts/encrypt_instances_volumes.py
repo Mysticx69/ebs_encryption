@@ -6,6 +6,7 @@
 import argparse
 import configparser
 import logging
+import os
 import time
 from typing import List
 from typing import Optional
@@ -15,19 +16,23 @@ import boto3
 import botocore.exceptions
 
 
-def setup_logging(log_file: str) -> logging.Logger:
+def setup_logging(log_file: str, log_dir: str) -> logging.Logger:
     """
     Set up logging.
 
     Args:
         log_file: The file to write the logs to.
+        log_dir: The directory to create the log file in.
 
     Returns:
         The logger object.
     """
+    # Create the log directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+
     logging.basicConfig(
         level=logging.INFO,
-        filename=log_file,
+        filename=os.path.join(log_dir, log_file),
         filemode="a",
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
@@ -363,8 +368,9 @@ def main(profile_name: str) -> None:
     # Extract the values
     region_name = config[profile_name]["region_name"]
     kms_key_id = config[profile_name]["kms_key_id"]
+    client_name = config[profile_name]["client_name"]
 
-    logger = setup_logging(f"ebs_encryption_{profile_name}.log")
+    logger = setup_logging(f"ebs_encryption_{client_name}.log", client_name)
 
     session = boto3.Session(profile_name=profile_name, region_name=region_name)
     ec2 = session.resource("ec2")

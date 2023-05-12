@@ -3,6 +3,7 @@
 import argparse
 import configparser
 import logging
+import os
 from typing import List
 from typing import Tuple
 
@@ -14,19 +15,23 @@ from encrypt_instances_volumes import gather_unencrypted_info
 # pylint: disable=C0301
 
 
-def setup_logging(log_file: str) -> logging.Logger:
+def setup_logging(log_file: str, log_dir: str) -> logging.Logger:
     """
     Set up logging.
 
     Args:
         log_file: The file to write the logs to.
+        log_dir: The directory to create the log file in.
 
     Returns:
         The logger object.
     """
+    # Create the log directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+
     logging.basicConfig(
         level=logging.INFO,
-        filename=log_file,
+        filename=os.path.join(log_dir, log_file),
         filemode="w",
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
@@ -50,7 +55,7 @@ def log_unencrypted_info(
                           attached to the instance.
     """
     logger.info("#" * 45)
-    logger.info("#    Instances to be processed :")
+    logger.info("#      Instances to be processed :")
     logger.info("#" * 45)
     logger.info("\n")
 
@@ -79,10 +84,11 @@ def main(profile_name: str) -> None:
     config = configparser.ConfigParser()
     config.read("config.ini")
 
-    logger = setup_logging(f"gather_instances_info_{profile_name}.log")
-
     # Extract the values
     region_name = config[profile_name]["region_name"]
+    client_name = config[profile_name]["client_name"]
+
+    logger = setup_logging(f"gather_instances_info_{client_name}.log", client_name)
 
     session = boto3.Session(profile_name=profile_name, region_name=region_name)
     ec2 = session.resource("ec2")
