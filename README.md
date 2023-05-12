@@ -44,6 +44,30 @@ The script executes the following steps:
 3. For each instance that isn't part of an Auto Scaling group or a Spot Instance, it stops the instance (if it's not already stopped), creates snapshots of unencrypted volumes, copies and encrypts these snapshots with the specified KMS key, creates encrypted volumes from the encrypted snapshots, detaches the original unencrypted volumes, attaches the new encrypted volumes, and then restarts the instance.
 4. It logs all activities and errors and presents a summary at the end.
 
+
+## Description of Main Functions
+
+The script contains several main functions, each fulfilling a specific purpose in the encryption process:
+
+- `get_instance_name`: This function extracts the name from the instance tags.
+
+- `get_volume_name`: This function extracts the name from the volume tags.
+
+- `gather_unencrypted_info`: This function gathers information about instances and their unencrypted volumes.
+
+- `is_part_of_auto_scaling_group`: This function checks if an instance is part of an Auto Scaling group.
+
+- `encrypt_volumes`: This function encrypts all volumes associated with an instance.
+
+- `main`: This is the entry point function to encrypt all volumes for all instances.
+
+## Additional Notes
+
+- The script skips instances that are part of an Auto Scaling group or are Spot Instances.
+- The script waits for certain operations to complete before moving onto the next step. This can make the script run for a long time, depending on the number and size of volumes to be encrypted.
+- After the script has completed running, ensure to check the health of your services.
+
+
 ## Logging
 All logs are written to a log file named `ebs_encryption_{client_name}.log` in the `client_name` directory. The `client_name` is the one you set in the config.ini file.
 
