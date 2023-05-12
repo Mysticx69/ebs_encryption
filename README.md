@@ -62,13 +62,6 @@ The script contains several main functions, each fulfilling a specific purpose i
 - `main`: This is the entry point function to encrypt all volumes for all instances.
 
 
-## Additional Notes
-
-- The script skips instances that are part of an Auto Scaling group or are Spot Instances.
-- The script waits for certain operations to complete before moving onto the next step. This can make the script run for a long time, depending on the number and size of volumes to be encrypted.
-- After the script has completed running, ensure to check the health of your services.
-
-
 ## Logging
 All logs are written to a log file named `ebs_encryption_{client_name}.log` in the `client_name` directory. The `client_name` is the one you set in the config.ini file.
 
