@@ -9,7 +9,7 @@ This script is designed to encrypt all unencrypted EBS volumes attached to EC2 i
 - AWS credentials configured (either by setting environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_DEFAULT_REGION` or using AWS CLI's `configure` command)
 
 ## Configuration
-Create a `config.ini` file in the same directory as the script with the following format:
+Create a `config.ini` file  with the following format:
 
 ```ini
 [profile_name]
@@ -60,6 +60,7 @@ The script contains several main functions, each fulfilling a specific purpose i
 - `encrypt_volumes`: This function encrypts all volumes associated with an instance.
 
 - `main`: This is the entry point function to encrypt all volumes for all instances.
+
 
 ## Additional Notes
 
