@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=W1203
 # pylint: disable=W0718
+# pylint: disable=C0301
 """This script encrypts all unencrypted EBS volumes for all EC2 instances."""
+import argparse
+import configparser
 import logging
 import time
 from typing import List
@@ -69,7 +72,7 @@ def get_volume_name(volume: 'boto3.resource("ec2").Volume') -> Optional[str]:
 
 def gather_unencrypted_info(
     ec2: boto3.resource,
-) -> List[Tuple[str, str, List[Tuple[str, str]]]]:
+) -> List[Tuple[str, str, List[Tuple[str, str, int]]]]:
     """
     Gather information about instances and their unencrypted volumes.
 
@@ -78,7 +81,7 @@ def gather_unencrypted_info(
 
     Returns:
         A list of tuples, where each tuple contains the instance ID, the instance name,
-        and a list of tuples with volume ID and volume name for unencrypted volumes attached to the instance.
+        and a list of tuples with volume ID, volume name and volume size for unencrypted volumes attached to the instance.
     """
     unencrypted_info = []
     for instance in ec2.instances.all():
@@ -87,7 +90,7 @@ def gather_unencrypted_info(
         for volume in instance.volumes.all():
             if not volume.encrypted:
                 volume_name = get_volume_name(volume)
-                unencrypted_volumes.append((volume.id, volume_name))
+                unencrypted_volumes.append((volume.id, volume_name, volume.size))
 
         if unencrypted_volumes:
             instance_name = get_instance_name(instance)
@@ -180,7 +183,7 @@ def encrypt_volumes(
         if not volume.encrypted:
             total_unencrypted_volumes += 1
             unencrypted_volumes_info.append(
-                f"{volume.id} ({volume_name}) - {volume.size}"
+                f"{volume.id} ({volume_name}) - {volume.size}GB"
             )
 
             logger.info(
@@ -343,19 +346,25 @@ def encrypt_volumes(
     logger.info("---------------------------------------------")
 
 
-def main(profile_name: str, region_name: str, kms_key_id: str) -> None:
+def main(profile_name: str) -> None:
     """
     Entry point function to encrypt all volumes for all instances.
 
     Args:
         profile_name: The name of the AWS profile to use.
-        region_name: The name of the AWS region to use.
-        kms_key_id: The ID of the KMS key to use for encryption.
 
     Returns:
         None
     """
-    logger = setup_logging("ebs_encryption.log")
+    # Read from the config file
+    config = configparser.ConfigParser()
+    config.read("config.ini")
+
+    # Extract the values
+    region_name = config[profile_name]["region_name"]
+    kms_key_id = config[profile_name]["kms_key_id"]
+
+    logger = setup_logging(f"ebs_encryption_{profile_name}.log")
 
     session = boto3.Session(profile_name=profile_name, region_name=region_name)
     ec2 = session.resource("ec2")
@@ -377,4 +386,16 @@ def main(profile_name: str, region_name: str, kms_key_id: str) -> None:
 
 
 if __name__ == "__main__":
-    main("lzv1-ebs", "eu-west-1", "alias/aws/ebs")
+    # Create argument parser
+    parser = argparse.ArgumentParser()
+
+    # Add argument for AWS profile
+    parser.add_argument(
+        "--profile", required=True, help="The name of the AWS profile to use."
+    )
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Run the main function with the given profile
+    main(args.profile)
