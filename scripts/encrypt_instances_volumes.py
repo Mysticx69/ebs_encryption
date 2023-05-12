@@ -370,6 +370,14 @@ def main(profile_name: str) -> None:
     kms_key_id = config[profile_name]["kms_key_id"]
     client_name = config[profile_name]["client_name"]
 
+    # Ask for user confirmation
+    user_input = input(
+        "Are you sure that you want to run this script? Services interruption can occurs. Type 'y' or 'yes' to continue: "
+    )
+    if user_input.lower() not in ["yes", "y"]:
+        print("Script execution cancelled by the user.")
+        return
+
     logger = setup_logging(f"ebs_encryption_{client_name}.log", client_name)
 
     session = boto3.Session(profile_name=profile_name, region_name=region_name)
