@@ -1,104 +1,51 @@
+# EBS Encryption Script
 
-# Encrypt Unencrypted EBS Volumes
-
-This script automates the process of creating encrypted copies of unencrypted Amazon EBS volumes. It does this by creating snapshots of the unencrypted volumes, encrypting the snapshots with a specified KMS key, and then creating new encrypted volumes from the encrypted snapshots.
+## Overview
+This script is designed to encrypt all unencrypted EBS volumes attached to EC2 instances in your AWS account. It utilizes Amazon's Key Management Service (KMS) to ensure secure and reliable encryption. Please note that running this script can lead to service interruption as instances may need to be stopped and started during the encryption process.
 
 ## Requirements
+- Python 3.7 or newer
+- Boto3 library (`pip install boto3`)
+- AWS credentials configured (either by setting environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_DEFAULT_REGION` or using AWS CLI's `configure` command)
 
-- Python 3.6 or later
-- Boto3 library
-- Valid AWS credentials with necessary permissions
+## Configuration
+Create a `config.ini` file in the same directory as the script with the following format:
+
+```ini
+[profile_name]
+region_name = your_region_name
+kms_key_id = your_kms_key_id
+client_name = your_client_name
+```
+
+Replace `profile_name`, `your_region_name`, `your_kms_key_id`, and `your_client_name` with your own values.
+
+- `profile_name`: The name of the AWS profile to use.
+- `region_name`: The AWS region name.
+- `kms_key_id`: The ID of the KMS key to use for encryption.
+- `client_name`: The name of the client.
 
 ## Usage
+Navigate to the script's directory and run the script with the following command:
 
-1. Set up your AWS credentials as environment variables or configure them using the AWS CLI or AWS SDK.
-2. Modify the `kms_key_id` variable in the `main()` function to use the desired KMS key for encryption.
-3. Execute the script: `python3 scripts/script_encrypt_ebs.py`
+```bash
+python script_name.py --profile your_profile_name
+```
 
-## Function Descriptions
+Replace `script_name.py` with the actual name of the script file and `your_profile_name` with the name of the profile you want to use (this should match the profile_name you set in the config.ini file).
 
-### get_instance_name(instance_id: str, ec2: boto3.client) -> Optional[str]
+When you run the script, you'll be asked to confirm that you want to proceed since running the script can lead to service interruptions. Type 'y' or 'yes' to continue.
 
-Returns the name of an EC2 instance given its instance ID.
+## Functionality
+The script executes the following steps:
 
-### get_volume_name(volume_id: str, ec2: boto3.client) -> Optional[str]
+1. Gathers information about instances and their unencrypted volumes.
+2. Checks if instances are part of an Auto Scaling group or are Spot Instances. If so, these instances are skipped.
+3. For each instance that isn't part of an Auto Scaling group or a Spot Instance, it stops the instance (if it's not already stopped), creates snapshots of unencrypted volumes, copies and encrypts these snapshots with the specified KMS key, creates encrypted volumes from the encrypted snapshots, detaches the original unencrypted volumes, attaches the new encrypted volumes, and then restarts the instance.
+4. It logs all activities and errors and presents a summary at the end.
 
-Returns the name of an EBS volume given its volume ID.
+## Logging
+All logs are written to a log file named `ebs_encryption_{client_name}.log` in the `client_name` directory. The `client_name` is the one you set in the config.ini file.
 
-### get_unencrypted_ebs_volumes(ec2: boto3.client) -> List[Tuple[str, str, Optional[str], Optional[str]]]
-
-Retrieves a list of unencrypted EBS volumes and their associated instance IDs, names, and volume names.
-
-### create_snapshot(volume_id: str, volume_name: str, ec2: boto3.client) -> str
-
-Creates a snapshot of the specified EBS volume.
-
-### wait_for_snapshot(snapshot_id: str, ec2: boto3.client) -> None
-
-Waits for the specified snapshot to be completed.
-
-### copy_snapshot_with_encryption(volume_id: str, snapshot_id: str, kms_key_id: str, ec2: boto3.client, enable_fsr: bool = False, fsr_availability_zones: Optional[List[str]] = None) -> str
-
-Copies an existing snapshot with server-side encryption using the specified KMS key and optionally enables Fast Snapshot Restore.
-
-### stop_instance(instance_id: str, instance_name: str, ec2: boto3.client) -> bool
-
-Stops the specified EC2 instance.
-
-### start_instance(instance_id: str, ec2: boto3.client) -> None
-
-Starts the specified EC2 instance.
-
-### detach_volume(volume_id: str, ec2: boto3.client) -> None
-
-Detaches the specified EBS volume.
-
-### create_encrypted_volume(snapshot_id: str, availability_zone: str, kms_key_id: str, ec2: boto3.client) -> str
-
-Creates a new encrypted EBS volume from the specified snapshot.
-
-### attach_volume(volume_id: str, instance_id: str, instance_name: str, device: str, ec2: boto3.client) -> None
-
-Attaches the specified EBS volume to the specified instance.
-
-### delete_snapshot(snapshot_id: str, ec2: boto3.client) -> None
-
-Deletes the specified snapshot.
-
-### copy_tags(source_volume_id: str, target_volume_id: str, ec2: boto3.client) -> None
-
-Copies tags from the source EBS volume to the target EBS volume.
-
-### disable_fsr(snapshot_id: str, fsr_availability_zones: List[str], ec2: boto3.client) -> None
-
-Disables Fast Snapshot Restore for the specified snapshot.
-
-### encrypt_ebs_volumes(kms_key_id: str) -> None
-
-Encrypts all unencrypted EBS volumes in the current region.
-
-### main() -> None
-
-Entry point of the script.
-
-## Notes
-
-- This script should be used with caution as it stops and starts EC2 instances, which may cause downtime for your services.
-- Always test it in a staging environment
-
-## Steps
-
-The script does the following:
-
-1. Finds unencrypted EBS volumes and retrieves their instance IDs, names, and volume names.
-2. Stops instances with unencrypted EBS volumes.
-3. Creates snapshots of the unencrypted EBS volumes.
-4. Waits for the snapshots to be completed.
-5. Copies the snapshots and encrypts them using the specified KMS key.
-6. Deletes the unencrypted snapshots.
-7. Detaches the unencrypted EBS volumes.
-8. Creates new encrypted EBS volumes from the encrypted snapshots.
-9. Copies the tags from the unencrypted EBS volumes to the new encrypted EBS volumes.
-10. Attaches the new encrypted EBS volumes to the instances.
-11. Starts the instances.
-12. Disables Fast Snapshot Restore (FSR) for the encrypted snapshots.
+## Warning
+This script can cause service interruptions as it stops and starts instances during the encryption process. Always ensure you have recent backups of your data and thoroughly test this script in a non-production environment before using it in a production environment. Be sure to check that all services hosted on the instances are healthy after the script runs.
