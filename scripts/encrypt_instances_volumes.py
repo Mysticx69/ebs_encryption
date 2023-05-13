@@ -386,7 +386,6 @@ def main(profile_name: str) -> None:
     autoscaling = session.client("autoscaling")
 
     unencrypted_info = gather_unencrypted_info(ec2)
-    print(unencrypted_info)
 
     for instance_id, instance_name, _ in unencrypted_info:
         try:
