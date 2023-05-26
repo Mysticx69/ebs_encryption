@@ -363,7 +363,7 @@ def main(profile_name: str) -> None:
     """
     # Read from the config file
     config = configparser.ConfigParser()
-    config.read("config.ini")
+    config.read("../config.ini")
 
     # Extract the values
     region_name = config[profile_name]["region_name"]

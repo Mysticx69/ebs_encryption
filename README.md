@@ -9,7 +9,7 @@ This script is designed to encrypt all unencrypted EBS volumes attached to EC2 i
 - AWS credentials configured (either by setting environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_DEFAULT_REGION` or using AWS CLI's `configure` command)
 
 ## Configuration
-Create a `config.ini` file  with the following format:
+Create a `config.ini` file in the project root with the following format:
 
 ```ini
 [profile_name]
@@ -20,7 +20,7 @@ client_name = your_client_name
 
 Replace `profile_name`, `your_region_name`, `your_kms_key_id`, and `your_client_name` with your own values.
 
-- `profile_name`: The name of the AWS profile to use.
+- `profile_name`: The name of the AWS profile to use (credentials).
 - `region_name`: The AWS region name.
 - `kms_key_id`: The ID of the KMS key to use for encryption.
 - `client_name`: The name of the client.
