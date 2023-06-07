@@ -351,7 +351,7 @@ def encrypt_volumes(
     logger.info("---------------------------------------------")
 
 
-def main(profile_name: str) -> None:
+def main(profile_name: str, instance_ids: List[str]) -> None:
     """
     Entry point function to encrypt all volumes for all instances.
 
@@ -363,7 +363,7 @@ def main(profile_name: str) -> None:
     """
     # Read from the config file
     config = configparser.ConfigParser()
-    config.read("../config.ini")
+    config.read("/home/ec2-user/encrypt-EBS/config.ini")
 
     # Extract the values
     region_name = config[profile_name]["region_name"]
@@ -388,6 +388,8 @@ def main(profile_name: str) -> None:
     unencrypted_info = gather_unencrypted_info(ec2)
 
     for instance_id, instance_name, _ in unencrypted_info:
+        if "all" not in instance_ids and instance_id not in instance_ids:
+            continue
         try:
             encrypt_volumes(
                 instance_id, ec2, ec2_client, autoscaling, kms_key_id, logger
@@ -407,8 +409,16 @@ if __name__ == "__main__":
         "--profile", required=True, help="The name of the AWS profile to use."
     )
 
+    # Add argument for instance IDs
+    parser.add_argument(
+        "--instances",
+        nargs="+",
+        required=True,
+        help="The IDs of the instances to encrypt, or 'all' to encrypt all instances.",
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
     # Run the main function with the given profile
-    main(args.profile)
+    main(args.profile, args.instances)

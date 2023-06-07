@@ -161,7 +161,8 @@ def log_unencrypted_info(
                 f"   Volume ID: {volume_id} | Volume Name: {volume_name} | Size: {volume_size} GB"
             )
         # Log a separator
-        logger.info("-" * 45)
+        logger.info("-" * 75)
+        logger.info("\n")
 
 
 def main(profile_name: str) -> None:
