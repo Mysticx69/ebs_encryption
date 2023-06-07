@@ -17,6 +17,7 @@ from encrypt_instances_volumes import gather_unencrypted_info
 # pylint: disable=C0301
 
 
+# Define the path to the configuration file
 CONFIG_FILE_PATH = "/home/ec2-user/encrypt-EBS/config.ini"
 
 
@@ -44,12 +45,15 @@ def setup_logging(client_name: str) -> logging.Logger:
         client_name: The name of the client, used to create the log file.
 
     Returns:
-        The logger object.
+        logger: The logger object.
     """
-    # Create the log directory if it doesn't exist
+    # Define the log directory based on the client name
     log_dir = f"/home/ec2-user/encrypt-EBS/{client_name}"
+
+    # Create the log directory if it doesn't exist
     os.makedirs(log_dir, exist_ok=True)
 
+    # Set up the logging configuration
     logging.basicConfig(
         level=logging.INFO,
         filename=os.path.join(log_dir, f"gather_instances_info_{client_name}.log"),
@@ -57,9 +61,11 @@ def setup_logging(client_name: str) -> logging.Logger:
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
 
+    # Set the logging level for boto3 and botocore to WARNING to reduce noise in the logs
     logging.getLogger("boto3").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)
 
+    # Return the logger object
     return logging.getLogger(__name__)
 
 
@@ -68,20 +74,22 @@ def read_config() -> configparser.ConfigParser:
     Read the configuration file.
 
     Returns:
-        The configuration parser object.
+        config: The configuration parser object.
     """
     # Check if the config file exists
     if not os.path.exists(CONFIG_FILE_PATH):
         raise ConfigFileNotFoundError(f"Config file not found: {CONFIG_FILE_PATH}")
 
-    # Read from the config file
+    # Create a configuration parser object
     config = configparser.ConfigParser()
 
+    # Try to read the configuration file
     try:
         config.read(CONFIG_FILE_PATH)
     except configparser.Error as error:
         raise ConfigFileReadError(f"Failed to read config file: {error}") from error
 
+    # Return the configuration parser object
     return config
 
 
