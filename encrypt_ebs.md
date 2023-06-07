@@ -6,7 +6,7 @@ This script is designed to encrypt all unencrypted EBS volumes attached to EC2 i
 ## Requirements
 - Python 3.7 or newer
 - Boto3 library (`pip install boto3`)
-- AWS credentials configured (either by setting environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_DEFAULT_REGION` or using AWS CLI's `configure` command)
+- AWS credentials configured (see boto3 [doc](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html))
 
 ## Configuration
 Create a `config.ini` file in the project root with the following format:
@@ -29,10 +29,17 @@ Replace `profile_name`, `your_region_name`, `your_kms_key_id`, and `your_client_
 Navigate to the script's directory and run the script with the following command:
 
 ```bash
-python script_name.py --profile your_profile_name
+python script_name.py --profile your_profile_name --instances instance_id1 instance_id2 ... instance_idN
 ```
 
-Replace `script_name.py` with the actual name of the script file and `your_profile_name` with the name of the profile you want to use (this should match the profile_name you set in the config.ini file).
+or
+
+```bash
+python script_name.py --profile your_profile_name --instances all
+```
+
+
+Replace script_name.py with the actual name of the script file and your_profile_name with the name of the profile you want to use (this should match the profile_name you set in the config.ini file). Replace instance_id1, instance_id2, ..., instance_idN with the IDs of the instances you want to encrypt. If you want to encrypt all instances, use all instead of the instance IDs.
 
 When you run the script, you'll be asked to confirm that you want to proceed since running the script can lead to service interruptions. Type 'y' or 'yes' to continue.
 
