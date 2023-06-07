@@ -365,6 +365,7 @@ def encrypt_volumes(
         "Please make sure that all the services hosted on this machine are healthly!"
     )
     logger.info("---------------------------------------------")
+    logger.info("\n")
 
 
 def main(profile_name: str, instance_ids: List[str]) -> None:
@@ -394,7 +395,7 @@ def main(profile_name: str, instance_ids: List[str]) -> None:
         print("Script execution cancelled by the user.")
         return
 
-    print("Running... please see the log file created")
+    print("Running... please see the log file created and do not interrupt the script")
 
     logger = setup_logging(f"ebs_encryption_{client_name}.log", client_name)
 
