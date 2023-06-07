@@ -4,6 +4,7 @@ import argparse
 import configparser
 import logging
 import os
+import sys
 from typing import List
 from typing import Tuple
 
@@ -80,15 +81,32 @@ def main(profile_name: str) -> None:
     Returns:
         None
     """
+    # Use a variable for the config file path
+    config_file_path = "/home/ec2-user/encrypt-EBS/config.ini"
+
+    # Check if the config file exists
+    if not os.path.exists(config_file_path):
+        print(f"Config file not found: {config_file_path}")
+        sys.exit(1)
+
     # Read from the config file
     config = configparser.ConfigParser()
-    config.read("../config.ini")
+
+    try:
+        config.read(config_file_path)
+
+    except configparser.Error as error:
+        print(f"Failed to read config file: {error}")
+        sys.exit(1)
 
     # Extract the values
     region_name = config[profile_name]["region_name"]
     client_name = config[profile_name]["client_name"]
 
-    logger = setup_logging(f"gather_instances_info_{client_name}.log", client_name)
+    logger = setup_logging(
+        f"/home/ec2-user/encrypt-EBS/{client_name}/gather_instances_info_{client_name}.log",
+        client_name,
+    )
 
     session = boto3.Session(profile_name=profile_name, region_name=region_name)
     ec2 = session.resource("ec2")
