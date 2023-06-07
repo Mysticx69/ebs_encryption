@@ -104,13 +104,16 @@ def create_session(profile_name: str, region_name: str) -> boto3.Session:
     Returns:
         The boto3 session object.
     """
+    # Try to create a boto3 session with the given profile and region
     try:
         session = boto3.Session(profile_name=profile_name, region_name=region_name)
     except botocore.exceptions.ProfileNotFound as error:
+        # If the profile is not found, raise a custom exception
         raise SessionCreationError(
             f"Failed to create boto3 session: {error}"
         ) from error
 
+    # Return the created session
     return session
 
 
@@ -139,19 +142,25 @@ def log_unencrypted_info(
     Returns:
         None
     """
+    # Log a header for the instances to be processed
     logger.info("#" * 45)
     logger.info("#      Instances to be processed :")
     logger.info("#" * 45)
     logger.info("\n")
 
+    # Loop over the instances and their unencrypted volumes
     for instance_id, instance_name, unencrypted_volumes in unencrypted_info:
+        # Log the instance ID, name, and number of unencrypted volumes
         logger.info(
             f"{instance_id} ({instance_name}) with {len(unencrypted_volumes)} unencrypted volume(s) :"
         )
+        # Loop over the unencrypted volumes
         for volume_id, volume_name, volume_size in unencrypted_volumes:
+            # Log the volume ID, name, and size
             logger.info(
                 f"   Volume ID: {volume_id} | Volume Name: {volume_name} | Size: {volume_size} GB"
             )
+        # Log a separator
         logger.info("-" * 45)
 
 
@@ -166,27 +175,35 @@ def main(profile_name: str) -> None:
         None
     """
     try:
+        # Read the configuration file
         config = read_config()
 
+        # Check if the profile is in the configuration file
         if profile_name not in config:
+            # If not, raise a custom exception
             raise ProfileNotFoundError(
                 f"Profile '{profile_name}' not found in config file"
             )
 
-        # Extract the values
+        # Extract the region name and client name from the configuration
         region_name = config[profile_name]["region_name"]
         client_name = config[profile_name]["client_name"]
 
+        # Set up the logger using the client name
         logger = setup_logging(client_name)
 
+        # Create a boto3 session using the profile name and region name
         session = create_session(profile_name, region_name)
 
+        # Get the EC2 resource from the session
         ec2 = session.resource("ec2")
 
-        # Usage:
+        # Gather information about unencrypted volumes
         infos = gather_unencrypted_info(ec2)
+        # Log the gathered information
         log_unencrypted_info(infos, logger)
 
+    # If any of the custom exceptions are raised, print the error message and exit the script
     except (
         ConfigFileNotFoundError,
         ConfigFileReadError,
