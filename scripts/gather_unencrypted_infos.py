@@ -20,6 +20,22 @@ from encrypt_instances_volumes import gather_unencrypted_info
 CONFIG_FILE_PATH = "/home/ec2-user/encrypt-EBS/config.ini"
 
 
+class ConfigFileNotFoundError(Exception):
+    """Exception raised when the configuration file is not found."""
+
+
+class ConfigFileReadError(Exception):
+    """Exception raised when there is an error reading the configuration file."""
+
+
+class ProfileNotFoundError(Exception):
+    """Exception raised when the specified profile is not found in the configuration file."""
+
+
+class SessionCreationError(Exception):
+    """Exception raised when there is an error creating the boto3 session."""
+
+
 def setup_logging(client_name: str) -> logging.Logger:
     """
     Set up logging.
@@ -56,8 +72,7 @@ def read_config() -> configparser.ConfigParser:
     """
     # Check if the config file exists
     if not os.path.exists(CONFIG_FILE_PATH):
-        print(f"Config file not found: {CONFIG_FILE_PATH}")
-        sys.exit(1)
+        raise ConfigFileNotFoundError(f"Config file not found: {CONFIG_FILE_PATH}")
 
     # Read from the config file
     config = configparser.ConfigParser()
@@ -65,8 +80,7 @@ def read_config() -> configparser.ConfigParser:
     try:
         config.read(CONFIG_FILE_PATH)
     except configparser.Error as error:
-        print(f"Failed to read config file: {error}")
-        sys.exit(1)
+        raise ConfigFileReadError(f"Failed to read config file: {error}") from error
 
     return config
 
@@ -85,8 +99,9 @@ def create_session(profile_name: str, region_name: str) -> boto3.Session:
     try:
         session = boto3.Session(profile_name=profile_name, region_name=region_name)
     except botocore.exceptions.ProfileNotFound as error:
-        print(f"Failed to create boto3 session: {error}")
-        sys.exit(1)
+        raise SessionCreationError(
+            f"Failed to create boto3 session: {error}"
+        ) from error
 
     return session
 
@@ -142,25 +157,36 @@ def main(profile_name: str) -> None:
     Returns:
         None
     """
-    config = read_config()
+    try:
+        config = read_config()
 
-    if profile_name not in config:
-        print(f"Profile '{profile_name}' not found in config file")
+        if profile_name not in config:
+            raise ProfileNotFoundError(
+                f"Profile '{profile_name}' not found in config file"
+            )
+
+        # Extract the values
+        region_name = config[profile_name]["region_name"]
+        client_name = config[profile_name]["client_name"]
+
+        logger = setup_logging(client_name)
+
+        session = create_session(profile_name, region_name)
+
+        ec2 = session.resource("ec2")
+
+        # Usage:
+        infos = gather_unencrypted_info(ec2)
+        log_unencrypted_info(infos, logger)
+
+    except (
+        ConfigFileNotFoundError,
+        ConfigFileReadError,
+        ProfileNotFoundError,
+        SessionCreationError,
+    ) as error:
+        print(str(error))
         sys.exit(1)
-
-    # Extract the values
-    region_name = config[profile_name]["region_name"]
-    client_name = config[profile_name]["client_name"]
-
-    logger = setup_logging(client_name)
-
-    session = create_session(profile_name, region_name)
-
-    ec2 = session.resource("ec2")
-
-    # Usage:
-    infos = gather_unencrypted_info(ec2)
-    log_unencrypted_info(infos, logger)
 
 
 if __name__ == "__main__":
