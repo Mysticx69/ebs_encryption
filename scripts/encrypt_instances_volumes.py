@@ -262,6 +262,13 @@ def encrypt_volumes(
                 volume.attachments[0]["Device"] if volume.attachments else None
             )
 
+            # Capture the original "Delete on Termination" value
+            delete_on_termination = (
+                volume.attachments[0]["DeleteOnTermination"]
+                if volume.attachments
+                else False
+            )
+
             volume.detach_from_instance(
                 Device=device_name,
                 InstanceId=instance_id,
@@ -317,6 +324,15 @@ def encrypt_volumes(
             )
             waiter = ec2_client.get_waiter("volume_in_use")
             waiter.wait(VolumeIds=[encrypted_volume.id])
+
+            instance.modify_attribute(
+                BlockDeviceMappings=[
+                    {
+                        "DeviceName": device_name,
+                        "Ebs": {"DeleteOnTermination": delete_on_termination},
+                    },
+                ]
+            )
 
             logger.info(
                 f"Volume {encrypted_volume.id} attached to instance {instance.id}."
@@ -377,6 +393,8 @@ def main(profile_name: str, instance_ids: List[str]) -> None:
     if user_input.lower() not in ["yes", "y"]:
         print("Script execution cancelled by the user.")
         return
+
+    print("Running... please see the log file created")
 
     logger = setup_logging(f"ebs_encryption_{client_name}.log", client_name)
 
