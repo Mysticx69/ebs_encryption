@@ -16,7 +16,6 @@ from encrypt_instances_volumes import gather_unencrypted_info
 # pylint: disable=W0718
 # pylint: disable=C0301
 
-
 # Define the path to the configuration file
 CONFIG_FILE_PATH = "/home/ec2-user/encrypt-EBS/config.ini"
 
