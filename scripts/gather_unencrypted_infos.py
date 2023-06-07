@@ -9,6 +9,7 @@ from typing import List
 from typing import Tuple
 
 import boto3
+import botocore.exceptions
 from encrypt_instances_volumes import gather_unencrypted_info
 
 # pylint: disable=W1203
@@ -16,23 +17,26 @@ from encrypt_instances_volumes import gather_unencrypted_info
 # pylint: disable=C0301
 
 
-def setup_logging(log_file: str, log_dir: str) -> logging.Logger:
+CONFIG_FILE_PATH = "/home/ec2-user/encrypt-EBS/config.ini"
+
+
+def setup_logging(client_name: str) -> logging.Logger:
     """
     Set up logging.
 
     Args:
-        log_file: The file to write the logs to.
-        log_dir: The directory to create the log file in.
+        client_name: The name of the client, used to create the log file.
 
     Returns:
         The logger object.
     """
     # Create the log directory if it doesn't exist
+    log_dir = f"/home/ec2-user/encrypt-EBS/{client_name}"
     os.makedirs(log_dir, exist_ok=True)
 
     logging.basicConfig(
         level=logging.INFO,
-        filename=os.path.join(log_dir, log_file),
+        filename=os.path.join(log_dir, f"gather_instances_info_{client_name}.log"),
         filemode="w",
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
@@ -43,6 +47,50 @@ def setup_logging(log_file: str, log_dir: str) -> logging.Logger:
     return logging.getLogger(__name__)
 
 
+def read_config() -> configparser.ConfigParser:
+    """
+    Read the configuration file.
+
+    Returns:
+        The configuration parser object.
+    """
+    # Check if the config file exists
+    if not os.path.exists(CONFIG_FILE_PATH):
+        print(f"Config file not found: {CONFIG_FILE_PATH}")
+        sys.exit(1)
+
+    # Read from the config file
+    config = configparser.ConfigParser()
+
+    try:
+        config.read(CONFIG_FILE_PATH)
+    except configparser.Error as error:
+        print(f"Failed to read config file: {error}")
+        sys.exit(1)
+
+    return config
+
+
+def create_session(profile_name: str, region_name: str) -> boto3.Session:
+    """
+    Create a boto3 session.
+
+    Args:
+        profile_name: The name of the AWS profile to use.
+        region_name: The name of the AWS region to use.
+
+    Returns:
+        The boto3 session object.
+    """
+    try:
+        session = boto3.Session(profile_name=profile_name, region_name=region_name)
+    except botocore.exceptions.ProfileNotFound as error:
+        print(f"Failed to create boto3 session: {error}")
+        sys.exit(1)
+
+    return session
+
+
 def log_unencrypted_info(
     unencrypted_info: List[Tuple[str, str, List[Tuple[str, str, int]]]],
     logger: logging.Logger,
@@ -51,9 +99,22 @@ def log_unencrypted_info(
     Log information about instances and their unencrypted volumes.
 
     Args:
-        unencrypted_info: A list of tuples, where each tuple contains the instance ID, the instance name,
-                          and a list of tuples with volume ID, volume name and volume size for unencrypted volumes
-                          attached to the instance.
+        unencrypted_info: A list of tuples, where each tuple contains the instance ID (str), the instance name (str),
+                          and a list of tuples with volume ID (str), volume name (str) and volume size (int) for
+                          unencrypted volumes attached to the instance. For example:
+                          [
+                            ("i-1234567890abcdef0", "Instance1", [
+                              ("vol-049df61146f12f89d", "Volume1", 8),
+                              ("vol-049df61146f12f89e", "Volume2", 10)
+                            ]),
+                            ("i-0987654321abcdef0", "Instance2", [
+                              ("vol-049df61146f12f89f", "Volume3", 20)
+                            ])
+                          ]
+        logger: The logger object to use for logging.
+
+    Returns:
+        None
     """
     logger.info("#" * 45)
     logger.info("#      Instances to be processed :")
@@ -81,34 +142,20 @@ def main(profile_name: str) -> None:
     Returns:
         None
     """
-    # Use a variable for the config file path
-    config_file_path = "/home/ec2-user/encrypt-EBS/config.ini"
+    config = read_config()
 
-    # Check if the config file exists
-    if not os.path.exists(config_file_path):
-        print(f"Config file not found: {config_file_path}")
-        sys.exit(1)
-
-    # Read from the config file
-    config = configparser.ConfigParser()
-
-    try:
-        config.read(config_file_path)
-
-    except configparser.Error as error:
-        print(f"Failed to read config file: {error}")
+    if profile_name not in config:
+        print(f"Profile '{profile_name}' not found in config file")
         sys.exit(1)
 
     # Extract the values
     region_name = config[profile_name]["region_name"]
     client_name = config[profile_name]["client_name"]
 
-    logger = setup_logging(
-        f"/home/ec2-user/encrypt-EBS/{client_name}/gather_instances_info_{client_name}.log",
-        client_name,
-    )
+    logger = setup_logging(client_name)
 
-    session = boto3.Session(profile_name=profile_name, region_name=region_name)
+    session = create_session(profile_name, region_name)
+
     ec2 = session.resource("ec2")
 
     # Usage:
