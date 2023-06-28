@@ -148,6 +148,7 @@ def encrypt_volumes(
         None
     """
     instance = ec2.Instance(instance_id)
+    instance_name = get_instance_name(instance)
     total_unencrypted_volumes = 0
     unencrypted_volumes_info = []
     encrypted_volumes_info = []
@@ -158,15 +159,16 @@ def encrypt_volumes(
 
     if is_part_of_auto_scaling_group(instance_id, autoscaling):
         logger.warning(
-            f"Instance {instance.id} is part of an Auto Scaling group. Skipping..."
+            f"Instance {instance.id} ({instance_name}) is part of an Auto Scaling group. Skipping..."
         )
         return
 
     if instance.instance_lifecycle == "spot":
-        logger.warning(f"Instance {instance.id} is a Spot Instance. Skipping...")
+        logger.warning(
+            f"Instance {instance.id} ({instance_name}) is a Spot Instance. Skipping..."
+        )
         return
 
-    instance_name = get_instance_name(instance)
     logger.info(
         f"Encrypting volume(s) attached to instance {instance.id} ({instance_name})..."
     )

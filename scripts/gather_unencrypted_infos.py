@@ -182,7 +182,7 @@ def main(profile_name: str) -> None:
         if profile_name not in config:
             # If not, raise a custom exception
             raise ProfileNotFoundError(
-                f"Profile '{profile_name}' not found in config file"
+                f"Profile '{profile_name}' not found in config.ini file"
             )
 
         # Extract the region name and client name from the configuration
