@@ -24,10 +24,10 @@ Replace `profile_name`, `your_region_name`, and `your_client_name` with your own
 - `client_name`: The name of the client.
 
 ## Usage
-Navigate to the script's directory and run the script with the following command:
+Run the script with the following command:
 
 ```bash
-python gather_unencrypted_infos.py --profile your_profile_name
+python3 scripts/gather_unencrypted_infos.py --profile your_profile_name
 ```
 
 Replace `your_profile_name` with the name of the profile you want to use (this should match the profile_name you set in the config.ini file).

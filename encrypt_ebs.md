@@ -26,16 +26,16 @@ Replace `profile_name`, `your_region_name`, `your_kms_key_id`, and `your_client_
 - `client_name`: The name of the client.
 
 ## Usage
-Navigate to the script's directory and run the script with the following command:
+Run the script with the following command:
 
 ```bash
-python script_name.py --profile your_profile_name --instances instance_id1 instance_id2 ... instance_idN
+python3 scripts/encrpyt_instances_volumes.py  --profile your_profile_name --instances instance_id1 instance_id2 ... instance_idN
 ```
 
 or
 
 ```bash
-python script_name.py --profile your_profile_name --instances all
+python3 scripts/encrpyt_instances_volumes.py --profile your_profile_name --instances all
 ```
 
 
