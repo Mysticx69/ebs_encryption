@@ -13,6 +13,8 @@
   - [3.6. Exiting the Virtual Environment](#36-exiting-the-virtual-environment)
 
 
+> Please set-up the requirements first !
+
 ## 1. EBS Unencrypted Infos
 
 Link for the doc: [Gather Unencrypted EBS Infos](./gather_infos.md)
