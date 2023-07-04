@@ -5,8 +5,8 @@ This script is designed to gather information about all unencrypted EBS volumes 
 
 ## Requirements
 - Python 3.7 or newer
-- Boto3 library (`pip install boto3`)
-- AWS credentials configured (either by setting environment variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_DEFAULT_REGION` or using AWS CLI's `configure` command)
+- Pipenv
+- AWS credentials configured
 
 ## Configuration
 Create a `config.ini` file in the project root with the following format:

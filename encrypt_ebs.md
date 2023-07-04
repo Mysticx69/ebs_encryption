@@ -5,8 +5,8 @@ This script is designed to encrypt all unencrypted EBS volumes attached to EC2 i
 
 ## Requirements
 - Python 3.7 or newer
-- Boto3 library (`pip install boto3`)
-- AWS credentials configured (see boto3 [doc](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html))
+- Pipenv
+- AWS credentials configured
 
 ## Configuration
 Create a `config.ini` file in the project root with the following format:
