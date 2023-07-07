@@ -5,7 +5,7 @@ This script is designed to encrypt all unencrypted EBS volumes attached to EC2 i
 
 ## Requirements
 
-Please use PipEnv to meet the requirements ! [Pipenv Quick Start](README.md#3-using-pipenv-for-dependency-management)
+Please use PipEnv to meet the requirements ! ([Pipenv Quick Start](README.md#3-using-pipenv-for-dependency-management))
 
 - Python 3.7 or newer
 - Pipenv
