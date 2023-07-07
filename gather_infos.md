@@ -4,6 +4,8 @@
 This script is designed to gather information about all unencrypted EBS volumes attached to EC2 instances in your AWS account. It utilizes Amazon's Boto3 library to interact with AWS services. Please note that this script only gathers and logs information, it does not perform any actions on the instances or volumes.
 
 ## Requirements
+
+Please use PipEnv to meet the requirements ! [Pipenv Quick Start](README.md#3-using-pipenv-for-dependency-management)
 - Python 3.7 or newer
 - Pipenv
 - AWS credentials configured
